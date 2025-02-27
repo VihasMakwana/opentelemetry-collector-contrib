@@ -427,9 +427,11 @@ func TestConfig_Validate(t *testing.T) {
 		},
 		"batcher max_size_items less than min_size_items": {
 			config: withDefaultConfig(func(cfg *Config) {
+				maxSizeItems := 1000
+				minSizeItems := 2000
 				cfg.Endpoints = []string{"http://test:9200"}
-				cfg.Batcher.MaxSizeItems = 1000
-				cfg.Batcher.MinSizeItems = 2000
+				cfg.Batcher.MaxSizeItems = &maxSizeItems
+				cfg.Batcher.MinSizeItems = &minSizeItems
 				enableBatcher := true
 				cfg.Batcher.Enabled = &enableBatcher
 			}),
