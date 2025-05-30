@@ -106,6 +106,7 @@ func (s *splunkScraper) scrape(ctx context.Context) (pmetric.Metrics, error) {
 		s.scrapeSearchArtifacts,
 		s.scrapeHealth,
 		s.scrapeSearch,
+		s.scrapeIndexerClusterManagerStatus,
 	}
 	errChan := make(chan error, len(metricScrapes))
 
@@ -114,15 +115,15 @@ func (s *splunkScraper) scrape(ctx context.Context) (pmetric.Metrics, error) {
 	}()
 
 	// if the build and version info has been configured that is pulled here
-	var info infoDict
+	var infoMap infoDict
 	if s.conf.VersionInfo {
-		info = s.scrapeInfo(ctx, now, errChan)
+		infoMap = s.scrapeInfo(ctx, now, errChan)
 	} else {
-		info = make(infoDict)
-		nullInfo := Info{Host: "", Entries: make([]infoEntry, 1)}
-		info[typeCm] = nullInfo
-		info[typeSh] = nullInfo
-		info[typeIdx] = nullInfo
+		infoMap = make(infoDict)
+		nullInfo := info{Host: "", Entries: make([]infoEntry, 1)}
+		infoMap[typeCm] = nullInfo
+		infoMap[typeSh] = nullInfo
+		infoMap[typeIdx] = nullInfo
 	}
 
 	for _, fn := range metricScrapes {
@@ -137,7 +138,7 @@ func (s *splunkScraper) scrape(ctx context.Context) (pmetric.Metrics, error) {
 			// actual function body
 			defer wg.Done()
 			fn(ctx, now, info, errs)
-		}(fn, ctx, now, info, errChan)
+		}(fn, ctx, now, infoMap, errChan)
 	}
 
 	wg.Wait()
@@ -1809,49 +1810,49 @@ func (s *splunkScraper) traverseHealthDetailFeatures(details healthDetails, now 
 }
 
 // somewhat unique scrape function for gathering the info attribute
-func (s *splunkScraper) scrapeInfo(_ context.Context, _ pcommon.Timestamp, errs chan error) map[any]Info {
+func (s *splunkScraper) scrapeInfo(_ context.Context, _ pcommon.Timestamp, errs chan error) map[any]info {
 	// there could be an endpoint configured for each type (never more than 3)
 
-	info := make(infoDict)
-	nullInfo := Info{Host: "", Entries: make([]infoEntry, 1)}
-	info[typeCm] = nullInfo
-	info[typeSh] = nullInfo
-	info[typeIdx] = nullInfo
+	infoMap := make(infoDict)
+	nullInfo := info{Host: "", Entries: make([]infoEntry, 1)}
+	infoMap[typeCm] = nullInfo
+	infoMap[typeSh] = nullInfo
+	infoMap[typeIdx] = nullInfo
 
 	for cliType := range s.splunkClient.clients {
-		var i Info
+		var i info
 
 		ept := apiDict[`SplunkInfo`]
 
 		req, err := s.splunkClient.createAPIRequest(cliType, ept)
 		if err != nil {
 			errs <- err
-			return info
+			return infoMap
 		}
 
 		res, err := s.splunkClient.makeRequest(req)
 		if err != nil {
 			errs <- err
-			return info
+			return infoMap
 		}
 		defer res.Body.Close()
 
 		body, err := io.ReadAll(res.Body)
 		if err != nil {
 			errs <- err
-			return info
+			return infoMap
 		}
 
 		err = json.Unmarshal(body, &i)
 		if err != nil {
 			errs <- err
-			return info
+			return infoMap
 		}
 
-		info[cliType] = i
+		infoMap[cliType] = i
 	}
 
-	return info
+	return infoMap
 }
 
 // Scrape Search Metrics
@@ -2059,4 +2060,40 @@ func (s *splunkScraper) setSearchJobTTLByID(sid string) error {
 	}
 
 	return nil
+}
+
+// Scrape Indexer Cluster Manger Status Endpoint
+func (s *splunkScraper) scrapeIndexerClusterManagerStatus(_ context.Context, now pcommon.Timestamp, info infoDict, errs chan error) {
+	if !s.conf.Metrics.SplunkIndexerRollingrestartStatus.Enabled {
+		return
+	}
+
+	i := info[typeCm].Entries[0].Content
+
+	ept := apiDict[`SplunkIndexerClusterManagerStatus`]
+	var icms indexersClusterManagerStatus
+
+	req, err := s.splunkClient.createAPIRequest(typeCm, ept)
+	if err != nil {
+		errs <- err
+		return
+	}
+	res, err := s.splunkClient.makeRequest(req)
+	if err != nil {
+		errs <- err
+		return
+	}
+	defer res.Body.Close()
+
+	if err := json.NewDecoder(res.Body).Decode(&icms); err != nil {
+		errs <- err
+		return
+	}
+
+	for _, ic := range icms.Entries {
+		if ic.Content.RollingRestartOrUpgrade {
+			s.mb.RecordSplunkIndexerRollingrestartStatusDataPoint(now, 1, ic.Content.SearchableRolling, ic.Content.RollingRestartFlag, i.Build, i.Version)
+		}
+		s.mb.RecordSplunkIndexerRollingrestartStatusDataPoint(now, 0, ic.Content.SearchableRolling, ic.Content.RollingRestartFlag, i.Build, i.Version)
+	}
 }
