@@ -7,7 +7,6 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/receiver"
 
-	"github.com/open-telemetry/opentelemetry-collector-contrib/confmap/converter/statefulconverter"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal/consumerretry"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/adapter"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
@@ -41,10 +40,6 @@ func createDefaultConfig() *FileLogConfig {
 			RetryOnFailure: consumerretry.NewDefaultConfig(),
 		},
 		InputConfig: *file.NewConfig(),
-	}
-	if statefulconverter.Stateful.IsEnabled() {
-		id := component.MustNewID("file_storage")
-		cfg.StorageID = &id
 	}
 	return cfg
 
