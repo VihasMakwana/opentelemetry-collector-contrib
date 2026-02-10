@@ -63,7 +63,8 @@ func TestLoadConfig(t *testing.T) {
 								KeyFile:  "/path/to/key",
 							},
 						}),
-						KeepAlivesEnabled: true},
+						KeepAlivesEnabled: true,
+					},
 					CheckCollectorPipeline: &healthcheck.CheckCollectorPipelineConfig{
 						Enabled:                  false,
 						Interval:                 "5m",
