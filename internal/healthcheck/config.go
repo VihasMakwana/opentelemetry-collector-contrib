@@ -116,6 +116,7 @@ func (c *Config) Unmarshal(conf *confmap.Conf) error {
 					Endpoint:  endpointForPort(DefaultHTTPPort),
 					Transport: confignet.TransportTypeTCP,
 				},
+				KeepAlivesEnabled: true,
 			},
 			Status: http.PathConfig{
 				Enabled: true,
@@ -134,6 +135,7 @@ func (c *Config) Unmarshal(conf *confmap.Conf) error {
 					Endpoint:  endpointForPort(DefaultGRPCPort),
 					Transport: confignet.TransportTypeTCP,
 				},
+				Keepalive: configoptional.Some(configgrpc.NewDefaultKeepaliveServerConfig()),
 			},
 		}
 	}
