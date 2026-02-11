@@ -1678,7 +1678,7 @@ func TestTranslateV2(t *testing.T) {
 			},
 		},
 		{
-			name: "multiple histogram metric with exemplar",
+			name: "multiple histogram metrics with exemplars",
 			request: &writev2.Request{
 				Symbols: []string{
 					"",
