@@ -2099,11 +2099,138 @@ func TestRemoteWriteHistogramWithExemplars(t *testing.T) {
 				var sid [8]byte
 				copy(sid[:], spanID)
 				ex.SetSpanID(pcommon.SpanID(sid))
+
 				return metrics
 			},
 		},
 		{
-			name: "multiple histogram metrics with exemplar",
+			name: "counter metric with exemplar, multiple data points",
+			requests: []*writev2.Request{
+				{
+					Symbols: []string{
+						"",
+						"job", "production/service_a", // 1,2
+						"instance", "host1", // 3,4
+						"__name__", "request_duration_ms", // 5,6
+						"trace_id", "4bf92f3577b34da6a3ce929d0e0e4736", // 7,8
+						"span_id", "00f067aa0ba902b7", // 9,10,
+						"4bf92f3577b34da6a3ce929d0e0e4740", "fff067aa0ba902b7", // 11, 12
+					},
+					Timeseries: []writev2.TimeSeries{
+						{
+							Metadata: writev2.Metadata{
+								Type: writev2.Metadata_METRIC_TYPE_COUNTER,
+							},
+							LabelsRefs: []uint32{
+								5, 6, // __name__
+								1, 2, // job
+								3, 4, // instance
+							},
+							Samples: []writev2.Sample{
+								{
+									Value:     1,
+									Timestamp: 1,
+								},
+								{
+									Value:     2,
+									Timestamp: 2,
+								},
+							},
+						},
+						// We're sending exemplars disconnected from histograms because
+						// remote-write 2.0 emits exemplars independently of histogram samples.
+						// See https://github.com/prometheus/prometheus/issues/17857.
+						{
+							Metadata: writev2.Metadata{
+								Type: writev2.Metadata_METRIC_TYPE_COUNTER,
+							},
+							LabelsRefs: []uint32{
+								5, 6, // __name__
+								1, 2, // job
+								3, 4, // instance
+							},
+							Exemplars: []writev2.Exemplar{
+								{
+									Value:     1.0,
+									Timestamp: 1,
+									LabelsRefs: []uint32{
+										7, 8, // trace_id
+										9, 10, // span_id
+									},
+								},
+								{
+									Value:     2.0,
+									Timestamp: 2,
+									LabelsRefs: []uint32{
+										7, 8, // trace_id
+										9, 10, // span_id
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: func() pmetric.Metrics {
+				metrics := pmetric.NewMetrics()
+				rm := metrics.ResourceMetrics().AppendEmpty()
+				attrs := rm.Resource().Attributes()
+				attrs.PutStr("service.namespace", "production")
+				attrs.PutStr("service.name", "service_a")
+				attrs.PutStr("service.instance.id", "host1")
+
+				sm := rm.ScopeMetrics().AppendEmpty()
+				sm.Scope().SetName("OpenTelemetry Collector")
+				sm.Scope().SetVersion("latest")
+
+				m := sm.Metrics().AppendEmpty()
+				m.SetName("request_duration_ms")
+				m.SetUnit("")
+				m.SetDescription("")
+
+				sum := m.SetEmptySum()
+				sum.SetAggregationTemporality(pmetric.AggregationTemporalityCumulative)
+				sum.SetIsMonotonic(true)
+
+				dp := sum.DataPoints().AppendEmpty()
+				dp.SetDoubleValue(1)
+				dp.SetTimestamp(pcommon.Timestamp(1 * int64(time.Millisecond)))
+
+				ex := dp.Exemplars().AppendEmpty()
+				ex.SetDoubleValue(1.0)
+				ex.SetTimestamp(pcommon.Timestamp(1 * int64(time.Millisecond)))
+
+				traceID, _ := hex.DecodeString("4bf92f3577b34da6a3ce929d0e0e4736")
+				var tid [16]byte
+				copy(tid[:], traceID)
+				ex.SetTraceID(pcommon.TraceID(tid))
+
+				spanID, _ := hex.DecodeString("00f067aa0ba902b7")
+				var sid [8]byte
+				copy(sid[:], spanID)
+				ex.SetSpanID(pcommon.SpanID(sid))
+
+				// 2nd exemplar
+				ex = dp.Exemplars().AppendEmpty()
+				ex.SetDoubleValue(2.0)
+				ex.SetTimestamp(pcommon.Timestamp(2 * int64(time.Millisecond)))
+
+				traceID, _ = hex.DecodeString("4bf92f3577b34da6a3ce929d0e0e4736")
+				copy(tid[:], traceID)
+				ex.SetTraceID(pcommon.TraceID(tid))
+
+				spanID, _ = hex.DecodeString("00f067aa0ba902b7")
+				copy(sid[:], spanID)
+				ex.SetSpanID(pcommon.SpanID(sid))
+
+				dp = sum.DataPoints().AppendEmpty()
+				dp.SetDoubleValue(2)
+				dp.SetTimestamp(pcommon.Timestamp(2 * int64(time.Millisecond)))
+				return metrics
+			},
+		},
+		{
+			name: "multiple counter metrics with exemplar",
 			requests: []*writev2.Request{
 				{
 					Symbols: []string{
