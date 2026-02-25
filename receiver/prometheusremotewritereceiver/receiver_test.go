@@ -1891,8 +1891,8 @@ func TestTranslateV2(t *testing.T) {
 							},
 						},
 					},
-					// We're sending exemplars disconnected from histograms because
-					// remote-write 2.0 emits exemplars independently of histogram samples.
+					// We're sending exemplars disconnected from counters because
+					// remote-write 2.0 emits exemplars independently of counter samples.
 					// See https://github.com/prometheus/prometheus/issues/17857.
 					{
 						Metadata: writev2.Metadata{
@@ -1998,8 +1998,8 @@ func TestTranslateV2(t *testing.T) {
 							},
 						},
 					},
-					// We're sending exemplars disconnected from histograms because
-					// remote-write 2.0 emits exemplars independently of histogram samples.
+					// We're sending exemplars disconnected from counters because
+					// remote-write 2.0 emits exemplars independently of counter samples.
 					// See https://github.com/prometheus/prometheus/issues/17857.
 					{
 						Metadata: writev2.Metadata{
