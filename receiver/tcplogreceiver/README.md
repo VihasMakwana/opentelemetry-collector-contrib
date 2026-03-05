@@ -92,3 +92,43 @@ receivers:
     listen_address: "0.0.0.0:54525"
 ```
 
+### Advanced
+
+Following configuration incorporates TLS, multiline config, operators and retry on failure:
+
+```yaml
+receivers:
+  tcplog:
+    listen_address: "0.0.0.0:54525"
+    max_log_size: 2MiB
+    one_log_per_packet: false
+    add_attributes: true
+    encoding: utf-8
+    attributes:
+      environment: "production"
+      team: "backend"
+    resource:
+      service.name: "my-tcp-service"
+      service.version: "1.0.0"
+    tls:
+      cert_file: "/etc/otel/certs/server.crt"
+      key_file: "/etc/otel/certs/server.key"
+      ca_file: "/etc/otel/certs/ca.crt"
+      client_ca_file: "/etc/otel/certs/client-ca.crt"
+    retry_on_failure:
+      enabled: true
+      initial_interval: 2s
+      max_interval: 20s
+      max_elapsed_time: 2m
+    multiline:
+      line_start_pattern: "^\d{4}-\d{2}-\d{2}" # logs starting with a date
+      omit_pattern: true
+    operators:
+      - type: json_parser
+        id: parse_json
+        output: timestamp_parser
+      - type: timestamp
+        id: timestamp_parser
+        parse_from: attributes.timestamp
+        layout: "2006-01-02T15:04:05Z07:00"
+```
