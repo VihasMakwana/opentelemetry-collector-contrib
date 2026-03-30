@@ -1194,6 +1194,33 @@ func TestMetricsPusher_topicFromAttribute_multiResource(t *testing.T) {
 		"resource on %s must have attribute value %q", topicA, topicA)
 }
 
+// TestPartitionData_RoundRobinRandom verifies that round_robin and random
+// partitioners do not set message keys (partitioning is handled client-side by kgo).
+func TestPartitionData_RoundRobinRandom(t *testing.T) {
+	for _, pt := range []PartitionerType{PartitionerRoundRobin, PartitionerRandom} {
+		t.Run(string(pt), func(t *testing.T) {
+			cfg := Config{Partitioner: PartitionerConfig{Type: pt}}
+
+			md := pmetric.NewMetrics()
+			md.ResourceMetrics().AppendEmpty()
+			md.ResourceMetrics().AppendEmpty()
+
+			// round_robin and random do not split pdata; all data is yielded in
+			// one chunk with a nil message key.
+			var keys [][]byte
+			var count int
+			for key := range (&kafkaMetricsMessenger{config: cfg}).partitionData(md) {
+				keys = append(keys, key)
+				count++
+			}
+
+			require.Equal(t, 1, count, "%s should not split data", pt)
+			assert.Nil(t, keys[0], "%s should not set a message key", pt)
+		})
+	}
+}
+
+
 type extensionsHost map[component.ID]component.Component
 
 func (m extensionsHost) GetExtensions() map[component.ID]component.Component {

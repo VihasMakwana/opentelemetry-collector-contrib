@@ -23,6 +23,26 @@ var errLogsPartitionExclusive = errors.New(
 	"partition_logs_by_resource_attributes and partition_logs_by_trace_id cannot both be enabled",
 )
 
+type PartitionerType string
+
+const (
+	// PartitionerRoundRobin distributes records across partitions in
+	// round-robin order.
+	PartitionerRoundRobin PartitionerType = "round_robin"
+
+	// PartitionerRandom assigns records to a randomly selected partition.
+	PartitionerRandom PartitionerType = "random"
+)
+
+// PartitionerConfig configures the Kafka record partitioner.
+type PartitionerConfig struct {
+	// Type is the partitioner type. Valid values are "round_robin" and
+	// "random". When unset, default sarama partitioning is used.
+	Type PartitionerType `mapstructure:"type"`
+
+	Config map[string]any `mapstructure:",remain"`
+}
+
 var (
 	errTopicMetadataKeyNotIncluded        = errors.New("topic_from_metadata_key must be present in sending_queue::batch::partition::metadata_keys if batching is enabled")
 	errBatchPartitionMetadataKeysRequired = errors.New("sending_queue::batch::partition::metadata_keys must be configured when include_metadata_keys is set and batching is enabled")
@@ -78,6 +98,11 @@ type Config struct {
 	// selection falls back to the Kafka client’s default strategy. Resource
 	// attributes are not used for the key when this option is enabled.
 	PartitionLogsByTraceID bool `mapstructure:"partition_logs_by_trace_id"`
+
+	// Partitioner configures the strategy used to assign records to Kafka
+	// partitions. When unset, the default sarama-compatible sticky key
+	// partitioner is used.
+	Partitioner PartitionerConfig `mapstructure:"partitioner"`
 }
 
 func (c *Config) Validate() error {

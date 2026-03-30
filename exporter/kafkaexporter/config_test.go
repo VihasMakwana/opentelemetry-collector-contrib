@@ -140,6 +140,56 @@ func TestLoadConfig(t *testing.T) {
 			},
 		},
 		{
+			id: component.NewIDWithName(metadata.Type, "round_robin_partitioner"),
+			expected: &Config{
+				TimeoutSettings:  exporterhelper.NewDefaultTimeoutConfig(),
+				BackOffConfig:    configretry.NewDefaultBackOffConfig(),
+				QueueBatchConfig: configoptional.Some(exporterhelper.NewDefaultQueueConfig()),
+				ClientConfig:     configkafka.NewDefaultClientConfig(),
+				Producer:         configkafka.NewDefaultProducerConfig(),
+				Logs:             SignalConfig{Topic: defaultLogsTopic, Encoding: defaultLogsEncoding},
+				Metrics:          SignalConfig{Topic: defaultMetricsTopic, Encoding: defaultMetricsEncoding},
+				Traces:           SignalConfig{Topic: defaultTracesTopic, Encoding: defaultTracesEncoding},
+				Profiles:         SignalConfig{Topic: defaultProfilesTopic, Encoding: defaultProfilesEncoding},
+				Partitioner:      PartitionerConfig{Type: PartitionerRoundRobin},
+			},
+		},
+		{
+			id: component.NewIDWithName(metadata.Type, "random_partitioner"),
+			expected: &Config{
+				TimeoutSettings:  exporterhelper.NewDefaultTimeoutConfig(),
+				BackOffConfig:    configretry.NewDefaultBackOffConfig(),
+				QueueBatchConfig: configoptional.Some(exporterhelper.NewDefaultQueueConfig()),
+				ClientConfig:     configkafka.NewDefaultClientConfig(),
+				Producer:         configkafka.NewDefaultProducerConfig(),
+				Logs:             SignalConfig{Topic: defaultLogsTopic, Encoding: defaultLogsEncoding},
+				Metrics:          SignalConfig{Topic: defaultMetricsTopic, Encoding: defaultMetricsEncoding},
+				Traces:           SignalConfig{Topic: defaultTracesTopic, Encoding: defaultTracesEncoding},
+				Profiles:         SignalConfig{Topic: defaultProfilesTopic, Encoding: defaultProfilesEncoding},
+				Partitioner:      PartitionerConfig{Type: PartitionerRandom},
+			},
+		},
+		{
+			id: component.NewIDWithName(metadata.Type, "round_robin_partitioner_with_events"),
+			expected: &Config{
+				TimeoutSettings:  exporterhelper.NewDefaultTimeoutConfig(),
+				BackOffConfig:    configretry.NewDefaultBackOffConfig(),
+				QueueBatchConfig: configoptional.Some(exporterhelper.NewDefaultQueueConfig()),
+				ClientConfig:     configkafka.NewDefaultClientConfig(),
+				Producer:         configkafka.NewDefaultProducerConfig(),
+				Logs:             SignalConfig{Topic: defaultLogsTopic, Encoding: defaultLogsEncoding},
+				Metrics:          SignalConfig{Topic: defaultMetricsTopic, Encoding: defaultMetricsEncoding},
+				Traces:           SignalConfig{Topic: defaultTracesTopic, Encoding: defaultTracesEncoding},
+				Profiles:         SignalConfig{Topic: defaultProfilesTopic, Encoding: defaultProfilesEncoding},
+				Partitioner: PartitionerConfig{
+					Type: PartitionerRoundRobin,
+					Config: map[string]any{
+						"events_per_partition": 10,
+					},
+				},
+			},
+		},
+		{
 			id: component.NewIDWithName(metadata.Type, "metadata_batch_valid"),
 			expected: &Config{
 				TimeoutSettings: exporterhelper.NewDefaultTimeoutConfig(),

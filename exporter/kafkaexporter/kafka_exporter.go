@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"iter"
 
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.opentelemetry.io/collector/client"
 	"go.opentelemetry.io/collector/component"
@@ -24,6 +25,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/kafkaexporter/internal/kafkaclient"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/kafkaexporter/internal/marshaler"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/kafkaexporter/internal/metadata"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/kafkaexporter/internal/partitioner"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal/traceutil"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/kafka"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/batchpersignal"
@@ -86,6 +88,16 @@ func (e *kafkaExporter[T]) Start(ctx context.Context, host component.Host) (err 
 		return err
 	}
 
+	opts := []kgo.Opt{
+		kgo.WithHooks(kafkaclient.NewFranzProducerMetrics(tb)),
+	}
+
+	if p, err := buildKgoPartitioner(e.cfg.Partitioner); err != nil {
+		return err
+	} else if p != nil {
+		opts = append(opts, kgo.RecordPartitioner(p))
+	}
+
 	producer, err := kafka.NewFranzSyncProducer(
 		ctx,
 		host,
@@ -93,7 +105,7 @@ func (e *kafkaExporter[T]) Start(ctx context.Context, host component.Host) (err 
 		e.cfg.Producer,
 		e.cfg.TimeoutSettings.Timeout,
 		e.logger,
-		kgo.WithHooks(kafkaclient.NewFranzProducerMetrics(tb)),
+		opts...,
 	)
 	if err != nil {
 		return err
@@ -103,6 +115,46 @@ func (e *kafkaExporter[T]) Start(ctx context.Context, host component.Host) (err 
 		e.cfg.Producer.MaxMessageBytes,
 	)
 	return nil
+}
+
+func buildKgoPartitioner(cfg PartitionerConfig) (kgo.Partitioner, error) {
+	t := cfg.Type
+	var pCfg partitioner.Config
+	var factory partitioner.Factory
+	switch t {
+	case "":
+		return nil, nil
+	case PartitionerRoundRobin:
+		factory = partitioner.NewRoundRobinFactory()
+		pCfg = factory.CreateDefaultConfig()
+	case PartitionerRandom:
+		factory = partitioner.NewRandomFactory()
+		pCfg = factory.CreateDefaultConfig()
+	default:
+		return nil, fmt.Errorf("partitioner.type %q is not valid; valid values are %q, %q",
+			t, PartitionerRoundRobin, PartitionerRandom)
+	}
+	if len(cfg.Config) > 0 {
+		decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+			TagName:          "mapstructure",
+			Result:           pCfg,
+			WeaklyTypedInput: true,
+			DecodeHook: mapstructure.ComposeDecodeHookFunc(
+				mapstructure.StringToTimeDurationHookFunc(),
+			),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create decoder for source %q: %w", t, err)
+		}
+		if err := decoder.Decode(pCfg); err != nil {
+			return nil, fmt.Errorf("failed to decode config for source %q: %w", t, err)
+		}
+	}
+
+	if err := pCfg.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid config for source %q: %w", t, err)
+	}
+	return factory.CreatePartitioner(pCfg)
 }
 
 func (e *kafkaExporter[T]) Close(context.Context) (err error) {
